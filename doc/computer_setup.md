@@ -18,6 +18,7 @@ The root directory for all the necessary software is referred to as `<labview_co
 1. Use Device Manager to identify the COM port for the laser (should appear as "Silicon Labs CP210x USB to UART Bridge (COM_)") and the Sutter Instrument Lambda controller (should appear as "Sutter Instrument Lambda 10-3 USB Serial Port (COM_)")
 1. Use PIMikroMove (installed alongside PI drivers) to identify the COM port for the Z piezo
 1. The shutter/filter wheel can be tested in LabVIEW using `<labview_control_root>\su10x_lambda_10-3_labview_driver\su10x\su10x Push Button Example.vi`
+1. Specify these COM ports in the initialization section of the LabVIEW control program.
 
 ## Install TCSPC software
 1. `<labview_control_root>\TCSPC package\*`: the different versions work best for different things: 9.82 is responsive, but on occasion has triggering issues especially if photon counts are too high, 9.86 is much slower but some people have had fewer triggering issues, 9.87 seems slightly faster than 9.86 but has not been tested thoroughly at this point.
