@@ -3,7 +3,7 @@
 The root directory for all the necessary software is referred to as `<labview_control_root>`. I've put a copy in my folder on the server (`Lab\Arunachalam`).
 
 ## Install National Instruments software
-1. Install LabVIEW: `<labview_control_root>\LabVIEW 2017\2017LV-64WinEng.exe`. Please see the email I sent you for the license information. You may need to call NI and provide the (site-wide?) serial number in that email to get a license code for each new installation. Request one for LV 207, not LV 2017 SP1, if you use this installer.
+1. Install LabVIEW: `<labview_control_root>\LabVIEW 2017\2017LV-64WinEng.exe`. Please see the email I sent you for the license information. You may need to call NI and provide the (site-wide?) serial number in that email to get a license code for each new installation. Request one for LV 2017, not LV 2017 SP1, if you use this installer.
 1. Install NI-DAQmx: `<labview_control_root>\NIDAQ\setup.exe` - necessary to control the DAQ board used for triggering and for SRS scanner control
 1. Install NI-VISA: `<labview_control_root>\NI VISA\ni-visa_19.5_online_repack.exe` - necessary for communication with the laser, the shutter/filter wheel controller, and the Z piezo
 
