@@ -1,1 +1,4 @@
 */.ipynb_checkpoints
+out/
+*.vsidx
+.vs/
