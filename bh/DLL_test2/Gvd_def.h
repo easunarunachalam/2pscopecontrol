@@ -138,7 +138,7 @@
   keyword (SCAN_TRIGGER), \
   keyword (RECT_ZOOM_X), \
   keyword (RECT_ZOOM_Y), \
-  keyword (L3_POWER), \    
+  keyword (L3_POWER), \
   keyword (L4_POWER), \
   keyword (MULTIPLEX2), \
   keyword (MULTIPLEX3), \
