@@ -8,4 +8,6 @@ control software for the Needleman lab 2-photon microscope
 
 `doc`: microscope documentation
 
-`notebooks`: jupyter notebooks with random snippets that will hopefully eventually be integrated into a real program
+`notebooks`: jupyter notebooks with
+1. widget-based control for non-BH microscope hardware (laser, XY stage, Z piezo, wave plates, ND filters, shutter, filter wheel, and NI DAQ trigger); and 
+2. random snippets that will hopefully eventually be integrated into a real program
