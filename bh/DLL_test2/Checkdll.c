@@ -34,7 +34,7 @@ SPCdata spc_data;
 SPC_EEP_Data spc_eep_data;
 SPCMemConfig  spc_mem_info;
 rate_values rates[MAX_NO_OF_SPC];
-short spc_state, armed, init_status, module_type, fifo_stopt_possible, first_write, spc_error, force_use, act_mod, module_type, block_length, fifo_type;
+short spc_state, armed, init_status, module_type, fifo_stopt_possible, first_write, spc_error, force_use, act_mod, module_type, block_length, fifo_type, ret, ret1;
 short sync_state[MAX_NO_OF_SPC], mod_state[MAX_NO_OF_SPC];
 int max_block_no, max_page, max_curve;
 unsigned long page_size, fifo_size, photons_to_read, max_ph_to_read, words_to_read, words_left, words_in_buf, max_words_in_buf, current_cnt;
@@ -48,31 +48,24 @@ DCCModInfo dcc_mod_info[MAX_NO_OF_DCC];
 DCCdata dcc_data;
 DCC_EEP_Data dcc_eep_data;
 
+GVDModInfo gvd_mod_info[MAX_NO_OF_GVD];
+GVDdata gvd_data;
+GVD_EEP_Data gvd_eep_data;
+GVDScanInfo  scan_info;
+short gvd_error, gvd_ret, gvd_ret1, gvd_init_status, gvd_state, gvd_trigger, lim_scan;
+int gvd_hardware, gvd_act_mod;
+int total_no_of_gvd, no_of_active_gvd, gvd_in_use[MAX_NO_OF_GVD];
+float fval;
+unsigned short FPGAversion;
+unsigned long fcnt;
+char gvd_error_string[128];
 char input_char;
 
 int main()
 {
-    /*char c;
-    c = getchar();
-    putchar(c);
-    if (c == 'a') {
-        putchar(c);
-        return 0;
-    }
-    else {
-        return -1;
-    }*/
-    /*if (int i = 0; i < 10000; ++i) {
-        Sleep(1000);
-        if ()
-    }*/
-
     char spc_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\spcm.ini";
     char dcc_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\dcc100.ini";
-    char gvd_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\gvd.ini";
-
-    short ret, ret1;
-    short init_status;
+    char gvd_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\gvd120.ini";
 
     /*
     Initialize SPC modules
@@ -195,6 +188,170 @@ int main()
     dcc_error = DCC_get_eeprom_data(act_mod, &dcc_eep_data);
     dcc_eep_data.serial_no[11] = '\0';
 
+
+    /*
+    Initialize GVD
+    */
+
+    BZERO(gvd_mod_info);
+    /* initialization must be done always at the beginning*/
+
+    gvd_ret = GVD_init(gvd_ini_fname);
+
+    printf("line %d -- ret: %d\n", __LINE__, gvd_ret);
+
+    if (gvd_ret < 0 && (-gvd_ret < GVD_NO_ACT_MOD || -gvd_ret >= GVD_NO_LICENSE))
+        return -1;   // fatal error, maybe wrong ini file   or DLL not registered
+
+    total_no_of_gvd = no_of_active_gvd = 0;
+
+    for (int i = 0; i < MAX_NO_OF_GVD; i++) {
+        GVD_get_module_info(i, &gvd_mod_info[i]);
+        if (gvd_mod_info[i].module_type != M_GVD_WRONG_TYPE) {
+            total_no_of_gvd++;
+        }
+        if (gvd_mod_info[i].init == INIT_GVD_OK) {
+            no_of_active_gvd++; gvd_in_use[i] = 1;
+        }
+        else
+            gvd_in_use[i] = 0;
+    }
+
+    printf("Number of GVDs: %d\n", total_no_of_gvd);
+
+    if (!total_no_of_gvd)
+        return -1;
+
+    gvd_ret = GVD_get_mode();
+    gvd_hardware = (gvd_ret == GVD_HARD);
+
+    if (total_no_of_gvd != no_of_active_gvd) {
+        // forcing hardware mode when module is in use is not recommended
+        //    because it can cause that other application will not work correctly
+        //    but it can be needed e.g after the software crash
+        for (int i = 0; i < MAX_NO_OF_GVD; i++) {
+            if (gvd_mod_info[i].module_type == M_GVD120 && gvd_mod_info[i].in_use == -1)
+                gvd_in_use[i] = 1;   // force using of the module used by other application
+        }
+        if (gvd_hardware)
+            gvd_ret = GVD_set_mode(GVD_HARD, 1, gvd_in_use);
+    }
+
+    //once more after GVD_set_mode
+    no_of_active_gvd = 0;
+    for (int i = 0; i < MAX_NO_OF_GVD; i++) {
+        GVD_get_module_info(i, &gvd_mod_info[i]);
+        if (gvd_mod_info[i].init == INIT_GVD_OK) {
+            no_of_active_gvd++; gvd_in_use[i] = 1;
+        }
+        else
+            gvd_in_use[i] = 0;
+    }
+
+
+    if (no_of_active_gvd == 0)   // no active GVD
+        return -1;
+
+    // with assumption that only 1 module exists
+    gvd_act_mod = -1;
+    for (int i = 0; i < MAX_NO_OF_GVD; i++) {
+        gvd_ret = GVD_test_if_active(i);
+        if (gvd_ret && gvd_act_mod == -1) {
+            gvd_act_mod = i;
+            break;
+        }
+    }
+
+    gvd_ret = GVD_get_mode();
+    gvd_hardware = (gvd_ret == GVD_HARD);
+
+    GVD_get_init_status(gvd_act_mod, &gvd_init_status);
+
+    if (gvd_init_status == INIT_GVD_OK) {
+        printf("line %d -- GVD initialized successfully. \n", __LINE__);
+        gvd_error = GVD_get_parameters(gvd_act_mod, &gvd_data);
+        //  to get error string ( description
+        GVD_get_error_string(gvd_error, gvd_error_string, 128);
+
+        gvd_error = GVD_get_eeprom_data(gvd_act_mod, &gvd_eep_data);
+        gvd_eep_data.serial_no[11] = '\0';
+
+        /* during GVD initialization all hardware parameters are set to values
+           taken from ini file ( or to default values )
+           This parameter set can be overwritten by using
+             GVD_set_parameters or GVD_set_parameter function.
+           After setting the parameter  check return value (should be >= 0 ) and
+           read the parameter again to get the value which was sent to the hardware
+            ( parameter value can be recalculated in DLL) */
+
+            // for example,
+        gvd_ret = GVD_set_parameter(gvd_act_mod, ZOOM_FACTOR, 2.); // change Zoom factor
+        GVD_get_parameter(gvd_act_mod, ZOOM_FACTOR, &fval);
+        gvd_data.zoom_factor = fval;
+
+        gvd_ret = GVD_get_version(gvd_act_mod, &FPGAversion);
+
+        lim_scan = 1;
+        fcnt = 5;
+        GVD_set_parameter(gvd_act_mod, FRAME_COUNTER, fcnt);  // 
+        GVD_set_parameter(gvd_act_mod, LIMIT_SCAN, lim_scan);  // 
+
+        // before scanning and after setting all parameters 
+        //   scan curve must be prepared in GVD memory
+        GVD_prepare_scan_curve(gvd_act_mod);
+
+        gvd_error = GVD_get_parameters(gvd_act_mod, &gvd_data);
+
+        GVD_get_scan_info(gvd_act_mod, &scan_info);
+        // to start scan
+        gvd_ret = GVD_start_scan(gvd_act_mod);
+        //  to test scan state
+        short not_ready = 1;
+        while (not_ready) {
+            GVD_test_state(gvd_act_mod, &gvd_state, 0);
+
+            if (gvd_state & GVD_RUNNING) {
+                // scan is started by software
+            }
+
+            if (gvd_state & GVD_SCAN) {
+                // module delivers scan signals ( after the trigger appeared)
+            }
+
+            if (lim_scan == 1) {    // run one sequence of frames
+                if (gvd_state & GVD_EOF_SEQ) {
+                    // scan of sequence of frames is finished
+                    not_ready = 0; // stop the loop
+                }
+            }
+            else {
+                // continuous scanning - endless loop 
+                // insert other break possibility
+            }
+
+        }
+
+        // call GVD_stop_scan to stop scan when scanning continuously or 
+        //     without waiting for the end of sequence of frames or
+        //     after  scan of sequence of frames was finished
+
+        //  !!! GVD_stop_scan must be called always at the end of scan to reset
+        //        GVD hardware otherwise next scan will be not possible
+        gvd_ret = GVD_stop_scan(gvd_act_mod);
+
+        GVD_test_state(gvd_act_mod, &gvd_state, 1); // test state + clear flags
+
+    }
+
+    gvd_ret1 = GVD_close();   // returns 2 when called after GVD_init
+
+
+
+
+    /*
+    start doing actual things
+    */
+
     // Outputs are disabled after DCC_init 
     // Enable outputs
     DCC_enable_outputs(act_mod, 1);
@@ -285,7 +442,7 @@ int main()
     
     buffer = (unsigned short*)realloc(buffer, max_words_in_buf * sizeof(unsigned short));
 
-    photons_to_read = 20000;
+    photons_to_read = 200000;
     if (fifo_type == FIFO_48)
         words_to_read = 3 * photons_to_read;
     else
@@ -371,6 +528,7 @@ int main()
         free(buffer);
     }
 
+    
 	getchar();
 }
 
