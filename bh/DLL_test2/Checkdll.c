@@ -134,6 +134,16 @@ int main()
         return -3;
     }
     else {
+
+        printf("Ready to begin FCS acquisition. Open microscope shutter and then press `s` to start...\n");
+        if (getchar() != 's') {
+            printf("Did not receive start signal. Shutting down.\n");
+            fclose(coords_fptr);
+            DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+            close_all_modules();
+            return 0;
+        }
+
         ipoint = 0;
         do {
             ncoords = fscanf(coords_fptr, "%f %f", &scanner_target_x, &scanner_target_y);
