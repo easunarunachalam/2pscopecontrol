@@ -76,6 +76,7 @@ char gvd_error_string[128];
 int init_ok, ret, ncoords, ipoint;
 char input_char;
 float scanner_target_x, scanner_target_y;
+float collection_time = 3.0;
 
 char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\fov1\\";
 char coords_fname[255] = "points.dat";
@@ -102,13 +103,13 @@ int main()
     Sleep(1000);
 
     // test for overload and cooler current limit
-    DCC_get_overload_state(spc_act_mod, &overload_state);
-    DCC_get_curr_lmt_state(spc_act_mod, &curr_lmt_state);
+    DCC_get_overload_state(dcc_act_mod, &overload_state);
+    DCC_get_curr_lmt_state(dcc_act_mod, &curr_lmt_state);
 
     // and shut down if there is an issue
     if ((overload_state != 0) || (curr_lmt_state != 0)) {
-        DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
         printf("\nWarning: current limit reached or detector overload. Shutting down...\n");
+        DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
         close_all_modules();
         return -2;
     }
@@ -127,6 +128,9 @@ int main()
     FILE* coords_fptr = fopen(coords_fpath, "r");
     if (coords_fptr == NULL) {
         printf("\nError: unable to open coordinate file %s\n", coords_fname);
+        fclose(coords_fptr);
+        DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+        close_all_modules();
         return -3;
     }
     else {
@@ -154,6 +158,10 @@ int main()
             sprintf(phot_fpath, phot_fpath_, ipoint++);
             printf("spc file = %s   ", phot_fpath);
 
+
+            // 0 - set SPC parameters (required for memory fill to work on measurements 2, 3, 4, ...
+            spc_ret = SPC_set_parameters(spc_act_mod, &spc_data);
+
             //  1 - SPC memory must be configured before the measurement SPC memory must be configured
             short no_of_routing_bits = 0;  // simple 1 dimensional measurement
             // configure memory on all modules
@@ -162,8 +170,13 @@ int main()
             if (spc_ret == -SPC_BAD_FUNC)
                 // for some modes ( for example scan modes)  you can't configure but only get current configuration
                 spc_ret = SPC_configure_memory(spc_act_mod, -1, no_of_routing_bits, &spc_mem_info);
-            if (spc_mem_info.maxpage == 0)
+            if (spc_mem_info.maxpage == 0) {
+                printf("\nError: spc_mem_info.maxpage = 0 (line %d).\n", __LINE__);
+                fclose(coords_fptr);
+                DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+                close_all_modules();
                 return -1;
+            }
 
             max_block_no = spc_mem_info.max_block_no;
             max_page = spc_mem_info.maxpage;
@@ -174,23 +187,30 @@ int main()
 
             buffer = (unsigned short*)realloc(buffer, max_page * page_size * no_of_active_spc * sizeof(unsigned short));
 
-            //  2 - measured blocks in SPC memory must be filled (cleared ) 
+            //  3 - measurement  page must be set on all modules
             short meas_page = 0;
             short offset_value = 0;
-            //spc_ret=SPC_fill_memory(-1, 0, meas_page, offset_value);
-            spc_ret = SPC_fill_memory(-1, -1, meas_page, offset_value);
+            SPC_set_page(spc_act_mod, meas_page);
+
+            //  2 - measured blocks in SPC memory must be filled (cleared )
+            spc_ret=SPC_fill_memory(spc_act_mod, 0, meas_page, offset_value);
+            //spc_ret = SPC_fill_memory(-1, -1, meas_page, offset_value);
+            printf("spc_ret = %d L%d\n", spc_ret, __LINE__);
             if (spc_ret > 0) {
                 // fill started but not yet finished
                 spc_ret = test_fill_state();
+                printf("spc_ret = %d L%d\n", spc_ret, __LINE__);
             }
-            if (spc_ret < 0)  // errors during memory fill
-                printf("\nError: error encountered during memory fill (Line %d).\n", __LINE__);
+            printf("spc_ret = %hu L%d\n", spc_ret, __LINE__);
+            if (spc_ret < 0) { // errors during memory fill
+                printf("\nError: error encountered during memory fill (line %d).\n", __LINE__);
+                fclose(coords_fptr);
+                DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+                close_all_modules();
                 return -1;
+            }
 
-            //  3 - measurement  page must be set on all modules
-            SPC_set_page(-1, meas_page);
-
-            //  4 - rates should  be cleared ,sync state can be checked
+            //  4 - rates should  be cleared, sync state can be checked
             for (int i = 0; i < MAX_NO_OF_SPC; i++) {
                 if (mod_active[i]) {
                     SPC_clear_rates(i);  // it is needed one time only
@@ -213,7 +233,7 @@ int main()
 
             words_left = words_to_read;
 
-            SPC_set_parameter( -1, TRIGGER, 2 );   // trigger active high
+            //SPC_set_parameter( -1, TRIGGER, 2 );   // trigger active high
 
             clock_t t;
             t = clock();
@@ -287,15 +307,26 @@ int main()
             double elapsed_time = ((double)t) / CLOCKS_PER_SEC; // in seconds
             printf("time = %3.2lf sec\n", elapsed_time);
 
-            if (words_in_buf > 0)
-                save_photons_in_file();
+            if (words_in_buf > 0) {
+                ret = save_photons_in_file();
+                if (ret < 0)
+                {
+                    printf("\nError: issue writing photons to file.");
+                    fclose(coords_fptr);
+                    DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+                    close_all_modules();
+                    
+                    return -1;
+                }
+            }
+                
 
         } while (ncoords == 2);
     }
 
     fclose(coords_fptr);
 
-    DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
+    DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
 
     close_all_modules();
 	getchar();
@@ -337,7 +368,7 @@ int initialize_SPC_modules() {
 
     if (!no_of_active_spc) {
         // no active SPC
-        printf("Error: no active SPC modules were found.\n");
+        printf("\nError: no active SPC modules were found.\n");
         return -1;
     }
     else {
@@ -347,10 +378,11 @@ int initialize_SPC_modules() {
         printf("Module type set as: SPC%i\n", spc_mod_info[0].module_type);
     }
 
-    if ((mod_active[0] == 1) && (mod_active[0] == 1)) {
+    /*if ((mod_active[0] == 1) && (mod_active[1] == 1)) {
         spc_act_mod = -1;
     }
-    else if (mod_active[0] == 1) {
+    else*/
+    if (mod_active[0] == 1) {
         spc_act_mod = 0;
     }
 
@@ -358,7 +390,10 @@ int initialize_SPC_modules() {
 
     init_status = SPC_get_init_status(spc_act_mod);
 
-    printf("Active SPC module status: %d\n", init_status);
+    printf("Active SPC module status: %hu\n", init_status);
+
+    spc_ret = SPC_get_parameters(spc_act_mod, &spc_data);
+    printf("SPC parameters backed up (L%d)\n", __LINE__);
 
     return 0;
 }
@@ -375,10 +410,10 @@ int initialize_DCC_modules()
     // initialization must be done always at the beginning
     dcc_ret = DCC_init(dcc_ini_fname);
 
-    if (dcc_ret < 0 && (-dcc_ret < DCC_NO_ACT_MOD || -dcc_ret >= DCC_WRONG_LICENSE))
+    if (dcc_ret < 0 && (-dcc_ret < DCC_NO_ACT_MOD || -dcc_ret >= DCC_WRONG_LICENSE)) {
+        printf("\nError: DCC initialization failed. ret = %d\n", dcc_ret);
         return -1;   // fatal error, maybe wrong ini file or DLL not registered
-
-    printf("DCC initialization ret: %d\n", dcc_ret);
+    }
 
     total_no_of_dcc = no_of_active_dcc = 0;
 
@@ -401,7 +436,7 @@ int initialize_DCC_modules()
 
     if (no_of_active_dcc == 0) {
         // no active DCC
-        printf("Error: no active DCC modules were found.\n");
+        printf("\nError: no active DCC modules were found.\n");
         return -1;
     }
 
@@ -424,7 +459,7 @@ int initialize_DCC_modules()
     DCC_get_init_status(spc_act_mod, &init_status);
 
     if (!(init_status == INIT_DCC_OK || !hardware)) {
-        printf("Error: unable to load DCC module(s) and/or enter hardware mode.\n");
+        printf("\nError: unable to load DCC module(s) and/or enter hardware mode.\n");
         return -1;
     }
 
@@ -446,10 +481,12 @@ int initialize_GVD_modules() {
 
     gvd_ret = GVD_init(gvd_ini_fname);
 
-    printf("GVD initialization ret: %d\n", gvd_ret);
+    
 
-    if (gvd_ret < 0 && (-gvd_ret < GVD_NO_ACT_MOD || -gvd_ret >= GVD_NO_LICENSE))
+    if (gvd_ret < 0 && (-gvd_ret < GVD_NO_ACT_MOD || -gvd_ret >= GVD_NO_LICENSE)) {
+        printf("GVD initialization ret: %d\n", gvd_ret);
         return -1;   // fatal error, maybe wrong ini file   or DLL not registered
+    }
 
     total_no_of_gvd = no_of_active_gvd = 0;
 
@@ -465,10 +502,13 @@ int initialize_GVD_modules() {
             gvd_in_use[i] = 0;
     }
 
-    printf("Number of GVDs: %d\n", total_no_of_gvd);
-
-    if (!total_no_of_gvd)
+    if (!total_no_of_gvd) {
+        printf("\nError: no GVD detected.\n");
         return -1;
+    }
+    else {
+        printf("Number of GVDs: %d\n", total_no_of_gvd);
+    }
 
     gvd_ret = GVD_get_mode();
     gvd_hardware = (gvd_ret == GVD_HARD);
@@ -498,7 +538,7 @@ int initialize_GVD_modules() {
 
 
     if (no_of_active_gvd == 0) {
-        printf("Error: no active GVD modules.\n");
+        printf("\nError: no active GVD modules.\n");
         return -1;
     }
 
@@ -518,7 +558,7 @@ int initialize_GVD_modules() {
     GVD_get_init_status(gvd_act_mod, &gvd_init_status);
 
     if (gvd_init_status != INIT_GVD_OK) {
-        printf("Error: unable to properly initialize GVD.\n");
+        printf("\nError: unable to properly initialize GVD.\n");
         return -1;
     }
     else {
@@ -529,7 +569,15 @@ int initialize_GVD_modules() {
 
 void close_all_modules() {
 
-    //DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
+    //DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
+
+    //spc_ret = SPC_close();   // returns 0 when there are no errors
+    //if (spc_ret == 0) {
+    //    printf("SPC closed successfully.\n");
+    //}
+    //else {
+    //    printf("SPC close result: %d\n", spc_ret);
+    //}
 
     dcc_ret = DCC_close();   // returns 2 when called after DCC_init
     if (dcc_ret == 2) {
@@ -551,6 +599,8 @@ void close_all_modules() {
 
     if (buffer) {
         free(buffer);
+    }
+    if (ptr) {
         free(ptr);
     }
     return;
@@ -581,7 +631,7 @@ int read_rates(int n_seconds) {
 
         // and shut down if there is an issue
         if ((overload_state != 0) || (curr_lmt_state != 0)) {
-            DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
+            DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
             printf("Warning: current limit reached or detector overload. Shutting down...");
             close_all_modules();
             return -2;
@@ -716,15 +766,19 @@ short  save_photons_in_file()
             first_frame[0] = (unsigned short)spc_header;
             first_frame[1] = (unsigned short)(spc_header >> 16);
         }
-        else
+        else {
+            printf("\nError: unable to get FIFO init vars.\n");
             return -1;
+        }
         /////////////////////////////////////////////////////////////
 
         first_write = 0;
         // write 1st frame to the file
         stream = fopen(phot_fpath, "wb");
-        if (!stream)
+        if (!stream) {
+            printf("\nError: unable to open spc file for writing.\n");
             return -1;
+        }
 
         if (fifo_type == FIFO_48)
             fwrite((void*)&first_frame[0], 2, 3, stream); // write 3 words ( 48 bits )
@@ -733,15 +787,19 @@ short  save_photons_in_file()
     }
     else {
         stream = fopen(phot_fpath, "ab");
-        if (!stream)
+        if (!stream) {
+            printf("\nError: unable to append to spc file.\n");
             return -1;
+        }
         fseek(stream, 0, SEEK_END);     // set file pointer to the end
     }
 
     spc_ret = fwrite((void*)buffer, 1, 2 * words_in_buf, stream); // write photons buffer
     fclose(stream);
-    if (spc_ret != 2 * words_in_buf)
-        return -1;     // error type in errno
+    if (spc_ret != 2 * words_in_buf) {
+        printf("\nError: error writing photon buffer (line %d).\n", __LINE__);
+        return -1;
+    }     // error type in errno
 
     return 0;
 }
@@ -772,48 +830,48 @@ static void init_fifo_measurement(void) // init actions same for part 4 and 5
     SPC_get_parameter(spc_act_mod, MODE, &curr_mode);
     printf("module type = %d %d\n", module_type, M_SPC150);
     switch (module_type) {
-        case M_SPC130:
-        case M_SPC131:
-        case M_SPC132:
-            SPC_set_parameter(spc_act_mod, MODE, FIFO130);
-            fifo_type = FIFO_130;
-            fifo_size = 262144;  // 256K 16-bit words
-            if (fpga_version < 0x306)  // < v.C6
-                fifo_stopt_possible = 0;
-            break;
+        //case M_SPC130:
+        //case M_SPC131:
+        //case M_SPC132:
+        //    SPC_set_parameter(spc_act_mod, MODE, FIFO130);
+        //    fifo_type = FIFO_130;
+        //    fifo_size = 262144;  // 256K 16-bit words
+        //    if (fpga_version < 0x306)  // < v.C6
+        //        fifo_stopt_possible = 0;
+        //    break;
 
-        case M_SPC600:
-        case M_SPC630:
-            SPC_set_parameter(spc_act_mod, MODE, FIFO_32);  // or FIFO_48
-            fifo_type = FIFO_32;  // or FIFO_48
-            fifo_size = 2 * 262144;   // 512K 16-bit words
-            if (fpga_version <= 0x207)  // <= v.B7
-                fifo_stopt_possible = 0;
-            break;
+        //case M_SPC600:
+        //case M_SPC630:
+        //    SPC_set_parameter(spc_act_mod, MODE, FIFO_32);  // or FIFO_48
+        //    fifo_type = FIFO_32;  // or FIFO_48
+        //    fifo_size = 2 * 262144;   // 512K 16-bit words
+        //    if (fpga_version <= 0x207)  // <= v.B7
+        //        fifo_stopt_possible = 0;
+        //    break;
 
-        case M_SPC830:
-            // ROUT_OUT for 830 == fifo
-            // with FPGA v. > CO  also FIFO32_M possible
-            SPC_set_parameter(spc_act_mod, MODE, ROUT_OUT);   // ROUT_OUT in 830 == fifo
-                                                             // or FIFO_32M
-            fifo_type = FIFO_830;    // or FIFO_IMG
-            fifo_size = 64 * 262144; // 16777216 ( 16M )16-bit words
-            break;
+        //case M_SPC830:
+        //    // ROUT_OUT for 830 == fifo
+        //    // with FPGA v. > CO  also FIFO32_M possible
+        //    SPC_set_parameter(spc_act_mod, MODE, ROUT_OUT);   // ROUT_OUT in 830 == fifo
+        //                                                     // or FIFO_32M
+        //    fifo_type = FIFO_830;    // or FIFO_IMG
+        //    fifo_size = 64 * 262144; // 16777216 ( 16M )16-bit words
+        //    break;
 
-        case M_SPC140:
-            // ROUT_OUT for 140 == fifo
-            // with FPGA v. > BO  also FIFO32_M possible
-            SPC_set_parameter(spc_act_mod, MODE, ROUT_OUT);   // or FIFO_32M
-            fifo_type = FIFO_140;  // or FIFO_IMG
-            fifo_size = 16 * 262144;  // 4194304 ( 4M ) 16-bit words
-            break;
+        //case M_SPC140:
+        //    // ROUT_OUT for 140 == fifo
+        //    // with FPGA v. > BO  also FIFO32_M possible
+        //    SPC_set_parameter(spc_act_mod, MODE, ROUT_OUT);   // or FIFO_32M
+        //    fifo_type = FIFO_140;  // or FIFO_IMG
+        //    fifo_size = 16 * 262144;  // 4194304 ( 4M ) 16-bit words
+        //    break;
 
+        //case M_SPC151:
+        //case M_SPC152:
+        //case M_SPC160:
+        //case M_SPC161:
+        //case M_SPC162:
         case M_SPC150:
-        case M_SPC151:
-        case M_SPC152:
-        case M_SPC160:
-        case M_SPC161:
-        case M_SPC162:
             // ROUT_OUT in 150 == fifo
             if (curr_mode != ROUT_OUT && curr_mode != FIFO_32M) {
                 SPC_set_parameter(spc_act_mod, MODE, ROUT_OUT);
@@ -873,7 +931,7 @@ static void init_fifo_measurement(void) // init actions same for part 4 and 5
     //   to avoid this behaviour - set mode to normal fifo mode = 1 ( ROUT_OUT)
     /// !!!!!!!!!!!!!!
         SPC_set_parameter(spc_act_mod, STOP_ON_TIME, 1);
-        SPC_set_parameter(spc_act_mod, COLLECT_TIME, 10.0); // default  - stop after 10 sec
+        SPC_set_parameter(spc_act_mod, COLLECT_TIME, collection_time);
     }
 
 
@@ -918,7 +976,6 @@ static void init_fifo_measurement(void) // init actions same for part 4 and 5
         max_words_in_buf = 3 * max_ph_to_read;
     else
         max_words_in_buf = 2 * max_ph_to_read;
-
 }
 
 //int GVD_scan(){
