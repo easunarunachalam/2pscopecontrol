@@ -115,7 +115,7 @@ int main()
     }
 
     // read rates for a few seconds to confirm things look normal
-    ret = read_rates(10);
+    ret = read_rates(3);
     if (ret < 0) {
         return ret;
     }
@@ -162,7 +162,7 @@ int main()
             // 0 - set SPC parameters (required for memory fill to work on measurements 2, 3, 4, ...
             spc_ret = SPC_set_parameters(spc_act_mod, &spc_data);
 
-            //  1 - SPC memory must be configured before the measurement SPC memory must be configured
+            //  1 - SPC memory must be configured before the measurement
             short no_of_routing_bits = 0;  // simple 1 dimensional measurement
             // configure memory on all modules
             spc_ret = SPC_configure_memory(-1, spc_data.adc_resolution, no_of_routing_bits,
@@ -185,7 +185,8 @@ int main()
 
             page_size = spc_mem_info.blocks_per_frame * spc_mem_info.frames_per_page * block_length;
 
-            buffer = (unsigned short*)realloc(buffer, max_page * page_size * no_of_active_spc * sizeof(unsigned short));
+            //buffer = (unsigned short*)realloc(buffer, max_page * page_size * no_of_active_spc * sizeof(unsigned short));
+            //memset(buffer, 0, sizeof buffer);
 
             //  3 - measurement  page must be set on all modules
             short meas_page = 0;
@@ -193,15 +194,12 @@ int main()
             SPC_set_page(spc_act_mod, meas_page);
 
             //  2 - measured blocks in SPC memory must be filled (cleared )
-            spc_ret=SPC_fill_memory(spc_act_mod, 0, meas_page, offset_value);
-            //spc_ret = SPC_fill_memory(-1, -1, meas_page, offset_value);
-            printf("spc_ret = %d L%d\n", spc_ret, __LINE__);
+            // spc_ret=SPC_fill_memory(spc_act_mod, 0, meas_page, offset_value);
+            spc_ret = SPC_fill_memory(-1, -1, meas_page, offset_value);
             if (spc_ret > 0) {
                 // fill started but not yet finished
                 spc_ret = test_fill_state();
-                printf("spc_ret = %d L%d\n", spc_ret, __LINE__);
             }
-            printf("spc_ret = %hu L%d\n", spc_ret, __LINE__);
             if (spc_ret < 0) { // errors during memory fill
                 printf("\nError: error encountered during memory fill (line %d).\n", __LINE__);
                 fclose(coords_fptr);
@@ -224,6 +222,11 @@ int main()
             init_fifo_measurement();
 
             buffer = (unsigned short*)realloc(buffer, max_words_in_buf * sizeof(unsigned short));
+            //if (buffer) {
+            //    puts("Zeroing out buffer");
+            //    memset(buffer, 0, sizeof buffer);
+            //}
+            
 
             photons_to_read = 200000;
             if (fifo_type == FIFO_48)
@@ -241,6 +244,7 @@ int main()
             spc_ret = SPC_start_measurement(spc_act_mod);
 
             while (!spc_ret) {
+                // printf("in loop, spc_ret=%d\n", spc_ret);
                 // now test SPC state and read photons
                 SPC_test_state(spc_act_mod, &spc_state);
                 // user must provide safety way out from this loop
@@ -308,7 +312,9 @@ int main()
             printf("time = %3.2lf sec\n", elapsed_time);
 
             if (words_in_buf > 0) {
+                // if (ipoint == 5){
                 ret = save_photons_in_file();
+                words_in_buf = 0;
                 if (ret < 0)
                 {
                     printf("\nError: issue writing photons to file.");
@@ -318,9 +324,9 @@ int main()
                     
                     return -1;
                 }
+                //}
             }
-                
-
+            
         } while (ncoords == 2);
     }
 
@@ -600,9 +606,6 @@ void close_all_modules() {
     if (buffer) {
         free(buffer);
     }
-    if (ptr) {
-        free(ptr);
-    }
     return;
 }
 
@@ -828,7 +831,7 @@ static void init_fifo_measurement(void) // init actions same for part 4 and 5
     // set correct measurement mode
 
     SPC_get_parameter(spc_act_mod, MODE, &curr_mode);
-    printf("module type = %d %d\n", module_type, M_SPC150);
+    //printf("module type = %d %d\n", module_type, M_SPC150);
     switch (module_type) {
         //case M_SPC130:
         //case M_SPC131:
