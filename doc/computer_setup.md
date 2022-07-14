@@ -26,6 +26,6 @@ The root directory for all the necessary software is referred to as `<labview_co
 
 # Setting up MicroManager control
 
-1. Add Sutter Lambda 10-2 Hub. Use these settings (the option to add the filter wheel and shutter will pop up after the hub is added):
+1. Add Sutter Lambda 10-2 Hub. Use these settings, changing the COM port as appropriate (the option to add the filter wheel and shutter will pop up after the hub is added):
 ![image](https://user-images.githubusercontent.com/45492958/179087317-2b2cd4b1-f650-4b35-af97-20d3abc558b5.png)
 
