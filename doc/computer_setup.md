@@ -23,3 +23,9 @@ The root directory for all the necessary software is referred to as `<labview_co
 ## Install TCSPC software
 1. `<labview_control_root>\TCSPC package\*`: the different versions work best for different things: 9.82 is responsive, but on occasion has triggering issues especially if photon counts are too high, 9.86 is much slower but some people have had fewer triggering issues, 9.87 seems slightly faster than 9.86 but has not been tested thoroughly at this point.
 1. If you want fine-grained control, DLLs installed alongside 9.82 are license protected while those installed with 9.86/9.87 are not. LabVIEW SPC drivers seem to work with the files installed with 9.87.
+
+# Setting up MicroManager control
+
+1. Add Sutter Lambda 10-2 Hub. Use these settings, changing the COM port as appropriate (the option to add the filter wheel and shutter will pop up after the hub is added):
+![image](https://user-images.githubusercontent.com/45492958/179087317-2b2cd4b1-f650-4b35-af97-20d3abc558b5.png)
+
