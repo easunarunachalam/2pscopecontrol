@@ -36,6 +36,7 @@ int initialize_SPC_modules();
 int initialize_DCC_modules();
 int initialize_GVD_modules();
 void close_all_modules();
+int read_rates(int);
 
 // SPC modules
 int total_no_of_spc, no_of_active_spc, mod_active[MAX_NO_OF_SPC];
@@ -50,7 +51,7 @@ int max_block_no, max_page, max_curve;
 unsigned long page_size, fifo_size, photons_to_read, max_ph_to_read, words_to_read, words_left, words_in_buf, max_words_in_buf, current_cnt;
 unsigned short *buffer, *ptr, fpga_version;
 unsigned int spc_header;
-char phot_fname[80] = "test_photons";
+
 
 // DCC modules
 int total_no_of_dcc, no_of_active_dcc, hardware;
@@ -72,11 +73,16 @@ unsigned short FPGAversion;
 unsigned long fcnt;
 char gvd_error_string[128];
 
-int init_ok, ncoords;
+int init_ok, ret, ncoords, ipoint;
 char input_char;
 float scanner_target_x, scanner_target_y;
 
-char coords_fname[255] = "C:\\Users\\TCSPC\\Desktop\\fov1\\points.dat";
+char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\fov1\\";
+char coords_fname[255] = "points.dat";
+char coords_fpath[255];
+char phot_basename[255] = "point_%03d.spc";
+char phot_fpath[255], phot_fpath_[255];
+
 int main()
 {
     /*
@@ -85,7 +91,6 @@ int main()
     if ((initialize_SPC_modules() < 0) || (initialize_DCC_modules() < 0) || (initialize_GVD_modules() < 0)){
         DCC_enable_outputs(dcc_act_mod, 0);
         close_all_modules();
-        printf("Closed all modules with status: SPC=%d DCC=%d GVD=%d\n", spc_ret, dcc_ret, gvd_ret);
         return -1;
     }
     /*
@@ -103,37 +108,55 @@ int main()
     // and shut down if there is an issue
     if ((overload_state != 0) || (curr_lmt_state != 0)) {
         DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
-        printf("Warning: current limit reached or detector overload. Shutting down...");
+        printf("\nWarning: current limit reached or detector overload. Shutting down...\n");
         close_all_modules();
         return -2;
     }
 
+    // read rates for a few seconds to confirm things look normal
+    ret = read_rates(10);
+    if (ret < 0) {
+        return ret;
+    }
+
     // open file with coordinates for FCS acquisitions
-    FILE* coords_fptr = fopen(coords_fname, "r");
+    strcpy(coords_fpath, data_dir_path);
+    strcat(coords_fpath, coords_fname);
+    printf("\nReading coordinate file: %s\n", coords_fpath);
+
+    FILE* coords_fptr = fopen(coords_fpath, "r");
     if (coords_fptr == NULL) {
-        printf("Error: unable to open coordinate file %s\n", coords_fname);
-        return -1;
+        printf("\nError: unable to open coordinate file %s\n", coords_fname);
+        return -3;
     }
     else {
+        ipoint = 0;
         do {
             ncoords = fscanf(coords_fptr, "%f %f", &scanner_target_x, &scanner_target_y);
             if (ncoords != 2) {
                 break;
             }
-            printf("scanner target:   x = %02.3f   y = %2.4f\n", scanner_target_x, scanner_target_y);
-
+            printf("point %d    scanner target: x = %02.3f  y = %2.4f   ", ipoint, scanner_target_x, scanner_target_y);
 
             // park beam at specified location and confirm that scanner has moved
-            park_offset_x = scanner_target_x;
-            park_offset_y = scanner_target_y;
-            gvd_ret = GVD_park_beam(gvd_act_mod, 1, 0, &park_offset_x, &park_offset_y);
+            gvd_ret = GVD_park_beam(gvd_act_mod, 1, 0, &scanner_target_x, &scanner_target_y);
             gvd_ret = GVD_get_parameter(gvd_act_mod, PARK_OFFS_X, &park_offset_x);
             gvd_ret = GVD_get_parameter(gvd_act_mod, PARK_OFFS_Y, &park_offset_y);
-            printf("park offset:   x = %lf   y = %lf\n", park_offset_x, park_offset_y);
+            printf("park offset:   x = %lf   y = %lf   ", park_offset_x, park_offset_y);
 
-            /*  1 - SPC memory must be configured before the measurement SPC memory must be configured */
-            short no_of_routing_bits = 0;  /* simple 1 dimensional measurement */
-                     // configure memory on all modules
+            /*
+            setup for FIFO measurement
+            */
+
+            // set filename for spc file
+            strcpy(phot_fpath_, data_dir_path);
+            strcat(phot_fpath_, phot_basename);
+            sprintf(phot_fpath, phot_fpath_, ipoint++);
+            printf("spc file = %s   ", phot_fpath);
+
+            //  1 - SPC memory must be configured before the measurement SPC memory must be configured
+            short no_of_routing_bits = 0;  // simple 1 dimensional measurement
+            // configure memory on all modules
             spc_ret = SPC_configure_memory(-1, spc_data.adc_resolution, no_of_routing_bits,
                 &spc_mem_info);
             if (spc_ret == -SPC_BAD_FUNC)
@@ -151,7 +174,7 @@ int main()
 
             buffer = (unsigned short*)realloc(buffer, max_page * page_size * no_of_active_spc * sizeof(unsigned short));
 
-            /*  2 - measured blocks in SPC memory must be filled (cleared ) */
+            //  2 - measured blocks in SPC memory must be filled (cleared ) 
             short meas_page = 0;
             short offset_value = 0;
             //spc_ret=SPC_fill_memory(-1, 0, meas_page, offset_value);
@@ -161,58 +184,19 @@ int main()
                 spc_ret = test_fill_state();
             }
             if (spc_ret < 0)  // errors during memory fill
+                printf("\nError: error encountered during memory fill (Line %d).\n", __LINE__);
                 return -1;
 
-            /*  3 - measurement  page must be set on all modules*/
+            //  3 - measurement  page must be set on all modules
             SPC_set_page(-1, meas_page);
 
-            /*  4 - rates should  be cleared ,sync state can be checked */
+            //  4 - rates should  be cleared ,sync state can be checked
             for (int i = 0; i < MAX_NO_OF_SPC; i++) {
                 if (mod_active[i]) {
-                    SPC_clear_rates(i);  /* it is needed one time only */
+                    SPC_clear_rates(i);  // it is needed one time only
                     SPC_get_sync_state(i, &sync_state[i]);
                 }
             }
-
-            /*
-            read rates
-            */
-            printf("\n");
-
-            printf("SYNC      CFD       TAC       ADC       \n");
-            for (int i = 0; i < 6; ++i) {
-                Sleep(1000);
-                spc_ret = SPC_read_rates(spc_act_mod, &rates[spc_act_mod]);
-
-                if (spc_ret == -SPC_RATES_NOT_RDY) {
-                    printf("%1.3e %1.3e %1.3e %1.3e\r", -1., -1., -1., -1.);
-                }
-                else {
-                    printf("%1.3e %1.3e %1.3e %1.3e\r", rates[spc_act_mod].sync_rate, rates[spc_act_mod].cfd_rate, rates[spc_act_mod].tac_rate, rates[spc_act_mod].adc_rate);
-                }
-
-                // test for overload and cooler current limit
-                DCC_get_overload_state(spc_act_mod, &overload_state);
-                DCC_get_curr_lmt_state(spc_act_mod, &curr_lmt_state);
-
-                // and shut down if there is an issue
-                if ((overload_state != 0) || (curr_lmt_state != 0)) {
-                    DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
-                    printf("Warning: current limit reached or detector overload. Shutting down...");
-                    close_all_modules();
-                    return -2;
-                }
-
-                if (_kbhit()) {
-                    Sleep(3000);
-                    scanf_s("%c", &input_char, 1);
-
-                    if (input_char == 'q') {
-                        break;
-                    }
-                }
-            }
-            printf("\n");
 
             /*
             FIFO measurement
@@ -229,7 +213,11 @@ int main()
 
             words_left = words_to_read;
 
-            // SPC_set_parameter ( -1, TRIGGER, 2 );   // trigger active low
+            SPC_set_parameter( -1, TRIGGER, 2 );   // trigger active high
+
+            clock_t t;
+            t = clock();
+
             spc_ret = SPC_start_measurement(spc_act_mod);
 
             while (!spc_ret) {
@@ -294,6 +282,11 @@ int main()
             // in order to reset DLL internal variables
             SPC_stop_measurement(spc_act_mod);
 
+            // note time elapsed
+            t = clock() - t;
+            double elapsed_time = ((double)t) / CLOCKS_PER_SEC; // in seconds
+            printf("time = %3.2lf sec\n", elapsed_time);
+
             if (words_in_buf > 0)
                 save_photons_in_file();
 
@@ -354,7 +347,10 @@ int initialize_SPC_modules() {
         printf("Module type set as: SPC%i\n", spc_mod_info[0].module_type);
     }
 
-    if (mod_active[0] == 1) {
+    if ((mod_active[0] == 1) && (mod_active[0] == 1)) {
+        spc_act_mod = -1;
+    }
+    else if (mod_active[0] == 1) {
         spc_act_mod = 0;
     }
 
@@ -532,7 +528,9 @@ int initialize_GVD_modules() {
 }
 
 void close_all_modules() {
+
     //DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
+
     dcc_ret = DCC_close();   // returns 2 when called after DCC_init
     if (dcc_ret == 2) {
         printf("DCC closed successfully.\n");
@@ -549,6 +547,8 @@ void close_all_modules() {
         printf("GVD close result: %d\n", gvd_ret);
     }
 
+    printf("\nClosed all modules with status: SPC=%d DCC=%d GVD=%d\n", spc_ret, dcc_ret, gvd_ret);
+
     if (buffer) {
         free(buffer);
         free(ptr);
@@ -556,6 +556,59 @@ void close_all_modules() {
     return;
 }
 
+int read_rates(int n_seconds) {
+    /*
+    read rates
+    */
+
+    printf("\n");
+
+    printf("SYNC      CFD       TAC       ADC       \n");
+    for (int i = 0; i < n_seconds; ++i) {
+        Sleep(1000);
+        spc_ret = SPC_read_rates(spc_act_mod, &rates[spc_act_mod]);
+
+        if (spc_ret == -SPC_RATES_NOT_RDY) {
+            printf("%1.3e %1.3e %1.3e %1.3e\r", -1., -1., -1., -1.);
+        }
+        else {
+            printf("%1.3e %1.3e %1.3e %1.3e\r", rates[spc_act_mod].sync_rate, rates[spc_act_mod].cfd_rate, rates[spc_act_mod].tac_rate, rates[spc_act_mod].adc_rate);
+        }
+
+        // test for overload and cooler current limit
+        DCC_get_overload_state(spc_act_mod, &overload_state);
+        DCC_get_curr_lmt_state(spc_act_mod, &curr_lmt_state);
+
+        // and shut down if there is an issue
+        if ((overload_state != 0) || (curr_lmt_state != 0)) {
+            DCC_enable_outputs(spc_act_mod, 0);  // disable outputs at the end
+            printf("Warning: current limit reached or detector overload. Shutting down...");
+            close_all_modules();
+            return -2;
+        }
+
+        if (_kbhit()) {
+            Sleep(3000);
+            printf("%d Rate reading suspended. Waiting for input... (c)ontinue, (q)uit\n", i);
+
+            input_char = getchar();
+            putchar(input_char);
+
+            if (input_char == 'c') {
+                printf("%d Continuing in current mode...\n", i);
+                continue;
+            }
+            else if (input_char == 'q') {
+                printf("%d Exiting acquisition...\n", i);
+                return -2;
+                //break;
+            }
+        }
+    }
+    printf("\n");
+
+    return 0;
+}
 
 short test_fill_state(void)
 {
@@ -669,7 +722,7 @@ short  save_photons_in_file()
 
         first_write = 0;
         // write 1st frame to the file
-        stream = fopen(phot_fname, "wb");
+        stream = fopen(phot_fpath, "wb");
         if (!stream)
             return -1;
 
@@ -679,7 +732,7 @@ short  save_photons_in_file()
             fwrite((void*)&first_frame[0], 2, 2, stream); // write 2 words ( 32 bits )
     }
     else {
-        stream = fopen(phot_fname, "ab");
+        stream = fopen(phot_fpath, "ab");
         if (!stream)
             return -1;
         fseek(stream, 0, SEEK_END);     // set file pointer to the end
@@ -692,8 +745,6 @@ short  save_photons_in_file()
 
     return 0;
 }
-
-
 
 static void init_fifo_measurement(void) // init actions same for part 4 and 5
 {
@@ -944,9 +995,3 @@ static void init_fifo_measurement(void) // init actions same for part 4 and 5
 //    GVD_test_state(gvd_act_mod, &gvd_state, 1); // test state + clear flags
 //
 //}
-
-/*
-    strcpy(phot_fname, "bar");
-    printf("%s %d\n", phot_fname, strlen(phot_fname));
-    return 0;
-*/
