@@ -1,4 +1,4 @@
-// Checkdll.cpp : Defines the entry point for the application.
+// Checkdll.cpp : Point-and-shoot FLCS acquisitions
 //
 
 #include <conio.h>
@@ -76,13 +76,14 @@ char gvd_error_string[128];
 int init_ok, ret, ncoords, ipoint;
 char input_char;
 float scanner_target_x, scanner_target_y;
-float collection_time = 3.0;
+float collection_time = 1.0;
 
-char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\fov1\\";
+char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\fov0\\";
 char coords_fname[255] = "points.dat";
 char coords_fpath[255];
 char phot_basename[255] = "point_%03d.spc";
 char phot_fpath[255], phot_fpath_[255];
+short SPC_ACTIVE_MOD = 1;
 
 int main()
 {
@@ -398,8 +399,15 @@ int initialize_SPC_modules() {
         spc_act_mod = -1;
     }
     else*/
-    if (mod_active[0] == 1) {
+    if (mod_active[SPC_ACTIVE_MOD] == 1) {
+        spc_act_mod = SPC_ACTIVE_MOD;
+    }
+    else if (mod_active[0] == 1) {
         spc_act_mod = 0;
+    }
+    else {
+        printf("Error: neither the specified module nor module 0 (M1) are active.\n");
+        return -1;
     }
 
     printf("Active SPC module is: module %d\n", spc_act_mod);
@@ -659,6 +667,10 @@ int read_rates(int n_seconds) {
 
             if (input_char == 'c') {
                 printf("%d Continuing in current mode...\n", i);
+                continue;
+            }
+            else if (input_char == 's') {
+                printf("%d Skipping rate reading...\n", i);
                 continue;
             }
             else if (input_char == 'q') {
