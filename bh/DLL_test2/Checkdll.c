@@ -76,9 +76,9 @@ char gvd_error_string[128];
 int init_ok, ret, ncoords, ipoint;
 char input_char;
 float scanner_target_x, scanner_target_y;
-float collection_time = 1.0;
+float collection_time = 10.0;
 
-char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\fov0\\";
+char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\2022-08-03 -- FCS -- yEA93\\";
 char coords_fname[255] = "points.dat";
 char coords_fpath[255];
 char phot_basename[255] = "point_%03d.spc";
@@ -239,7 +239,7 @@ int main()
             //}
             
 
-            photons_to_read = 200000;
+            photons_to_read = 20000000;
             if (fifo_type == FIFO_48)
                 words_to_read = 3 * photons_to_read;
             else
