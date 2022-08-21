@@ -76,9 +76,9 @@ char gvd_error_string[128];
 int init_ok, ret, ncoords, ipoint;
 char input_char;
 float scanner_target_x, scanner_target_y;
-float collection_time = 10.0;
+float collection_time = 3.0;
 
-char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\2022-08-03 -- FCS -- yEA93\\";
+char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\2022-08-20 -- FCS -- yEA68\\control, no flash\\run3\\";
 char coords_fname[255] = "points.dat";
 char coords_fpath[255];
 char phot_basename[255] = "point_%03d.spc";
@@ -157,7 +157,7 @@ int main()
             gvd_ret = GVD_park_beam(gvd_act_mod, 1, 0, &scanner_target_x, &scanner_target_y);
             gvd_ret = GVD_get_parameter(gvd_act_mod, PARK_OFFS_X, &park_offset_x);
             gvd_ret = GVD_get_parameter(gvd_act_mod, PARK_OFFS_Y, &park_offset_y);
-            printf("park offset:   x = %lf   y = %lf   ", park_offset_x, park_offset_y);
+            // printf("park offset:   x = %lf   y = %lf   ", park_offset_x, park_offset_y);
 
             /*
             setup for FIFO measurement
@@ -395,10 +395,10 @@ int initialize_SPC_modules() {
         printf("Module type set as: SPC%i\n", spc_mod_info[0].module_type);
     }
 
-    /*if ((mod_active[0] == 1) && (mod_active[1] == 1)) {
+    /* if ((mod_active[0] == 1) && (mod_active[1] == 1)) {
         spc_act_mod = -1;
     }
-    else*/
+    else */
     if (mod_active[SPC_ACTIVE_MOD] == 1) {
         spc_act_mod = SPC_ACTIVE_MOD;
     }
@@ -465,11 +465,11 @@ int initialize_DCC_modules()
     }
 
     // assuming that only 1 module exists
-    spc_act_mod = -1;
+    dcc_act_mod = -1;
     for (int i = 0; i < MAX_NO_OF_DCC; i++) {
         dcc_ret = DCC_test_if_active(i);
-        if (dcc_ret && spc_act_mod == -1) {
-            spc_act_mod = i;
+        if (dcc_ret && dcc_act_mod == -1) {
+            dcc_act_mod = i;
             break;
         }
     }
@@ -480,7 +480,7 @@ int initialize_DCC_modules()
     printf("DCC mode: %d\n", dcc_ret);
     printf("DCC hardware status: %d\n", hardware);
 
-    DCC_get_init_status(spc_act_mod, &init_status);
+    DCC_get_init_status(dcc_act_mod, &init_status);
 
     if (!(init_status == INIT_DCC_OK || !hardware)) {
         printf("\nError: unable to load DCC module(s) and/or enter hardware mode.\n");
@@ -488,8 +488,8 @@ int initialize_DCC_modules()
     }
 
     printf("DCC initialized successfully.\n");
-    dcc_error = DCC_get_parameters(spc_act_mod, &dcc_data);
-    dcc_error = DCC_get_eeprom_data(spc_act_mod, &dcc_eep_data);
+    dcc_error = DCC_get_parameters(dcc_act_mod, &dcc_data);
+    dcc_error = DCC_get_eeprom_data(dcc_act_mod, &dcc_eep_data);
     dcc_eep_data.serial_no[11] = '\0';
 
     return 0;
@@ -643,7 +643,7 @@ int read_rates(int n_seconds) {
             printf("%1.3e %1.3e %1.3e %1.3e\r", -1., -1., -1., -1.);
         }
         else {
-            printf("%1.3e %1.3e %1.3e %1.3e\r", rates[spc_act_mod].sync_rate, rates[spc_act_mod].cfd_rate, rates[spc_act_mod].tac_rate, rates[spc_act_mod].adc_rate);
+            printf("%1.3e %1.3e %1.3e %1.3e\n", rates[spc_act_mod].sync_rate, rates[spc_act_mod].cfd_rate, rates[spc_act_mod].tac_rate, rates[spc_act_mod].adc_rate);
         }
 
         // test for overload and cooler current limit
