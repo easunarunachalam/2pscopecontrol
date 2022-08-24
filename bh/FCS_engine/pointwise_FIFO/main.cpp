@@ -80,15 +80,27 @@ char input_char;
 float scanner_target_x, scanner_target_y;
 float collection_time = 0.5;
 
-char data_dir_path[255] = "C:\\Users\\TCSPC\\Desktop\\2022-08-20-21 -- FCS -- yEA68\\with flash\\";
-char coords_fname[255] = "points.dat";
+char data_dir_path[255];
+char coords_fname[255] = "\\points.dat";
 char coords_fpath[255];
-char phot_basename[255] = "point_%03d.spc";
+char phot_basename[255] = "\\point_%03d.spc";
 char phot_fpath[255], phot_fpath_[255];
 short SPC_ACTIVE_MOD = 0;
 
-int main()
+#include <iostream>
+int main(int argc, char** argv)
 {
+    if (argc != 3) {
+        printf("Error: Incorrect number of arguments. Exiting...\n");
+    }
+    else {
+        strcpy(data_dir_path, argv[1]);
+        printf("Working directory set as: %s\n", data_dir_path);
+
+        collection_time = std::atof(argv[2]);
+        printf("Collection time set as: %2.2f s\n", collection_time);
+    }
+
     /*
     If initialization of all modules does not occur properly, disable outputs and shut down
     */
@@ -711,7 +723,7 @@ short test_fill_state(void)
     return 0;
 }
 
-short  save_photons_in_file()
+short save_photons_in_file()
 {
     long spc_ret;
     int i;
