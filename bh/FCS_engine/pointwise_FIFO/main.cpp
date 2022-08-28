@@ -1,5 +1,7 @@
 // main.cpp : FCS acquisition engine
-//
+// run as follows:
+// PS C:\Users\TCSPC\Documents\GitHub\2pscopecontrol\bh\FCS_engine\pointwise_FIFO\out\build\x64-debug>
+// .\FCS_engine.exe "<working directory>" <collection time>
 
 #include <conio.h>
 #include <direct.h>
@@ -14,8 +16,6 @@
 #include "Dcc_def.h"
 #include "Gvd_def.h"
 #include "Spcm_def.h"
-
-// #include "main.h"
 
 
 #define MAX_LOADSTRING 100
@@ -251,7 +251,7 @@ int main(int argc, char** argv)
             //    puts("Zeroing out buffer");
             //    memset(buffer, 0, sizeof buffer);
             //}
-            
+
 
             photons_to_read = 20000000;
             if (fifo_type == FIFO_48)
@@ -346,12 +346,12 @@ int main(int argc, char** argv)
                     fclose(coords_fptr);
                     DCC_enable_outputs(dcc_act_mod, 0);  // disable outputs at the end
                     close_all_modules();
-                    
+
                     return -1;
                 }
                 //}
             }
-            
+
         } while (ncoords == 2);
     }
 
@@ -519,7 +519,7 @@ int initialize_GVD_modules() {
 
     gvd_ret = GVD_init(gvd_ini_fname);
 
-    
+
 
     if (gvd_ret < 0 && (-gvd_ret < GVD_NO_ACT_MOD || -gvd_ret >= GVD_NO_LICENSE)) {
         printf("GVD initialization ret: %d\n", gvd_ret);
@@ -624,7 +624,7 @@ void close_all_modules() {
     else {
         printf("DCC close result: %d\n", dcc_ret);
     }
-    
+
     gvd_ret = GVD_close();   // returns 2 when called after GVD_init
     if (gvd_ret == 2) {
         printf("GVD closed successfully.\n");
