@@ -4,7 +4,7 @@ control software for the Needleman lab 2-photon microscope
 
 ## Contents:
 
-`bh`: C/C++ code for low-level control of Becker & Hickl FLIM system (detectors, SPC cards, and scanner) for point-by-point FCS measurements
+`bh`: C/C++ code for low-level control of Becker & Hickl FLIM system (detectors, SPC cards, and scanner) for point-by-point FCS measurements (NOTE: this is only intended for use with SPC-150 cards, and does not perform compatibility checks)
 
 `doc`: documentation for generic setup (driver installation, etc.) and setup for custom FCS code
 
