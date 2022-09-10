@@ -85,7 +85,7 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
     }
 
     int nphotons = st.st_size / 4;
-    std::cout << nphotons << " entries" << std::endl;
+    std::cout << nphotons << " entries...";
     
 
     // resize arrays for micro and macrotime

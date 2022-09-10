@@ -1,4 +1,6 @@
-*/.ipynb_checkpoints
+**/*-checkpoint.py
+**/*-checkpoint.ipynb
+**/.ipynb_checkpoints
 bh/include/*
 out/
 *.vsidx
