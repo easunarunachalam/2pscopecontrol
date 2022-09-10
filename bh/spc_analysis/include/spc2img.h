@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <sys/stat.h>
 
@@ -84,7 +85,7 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
     }
 
     int nphotons = st.st_size / 4;
-    std::cout << nphotons << " photons" << std::endl;
+    std::cout << nphotons << " entries" << std::endl;
     
 
     // resize arrays for micro and macrotime
@@ -100,24 +101,24 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
     std::ifstream ifs( fn_spc, std::ios::binary ); // open in binary mode
     for (int iphoton = 0; iphoton < nphotons; ++iphoton)
     {
-        std::bitset<BITS_PER_BYTE*4> bits = read_bits<4>(ifs);
+        std::bitset<BITS_PER_BYTE * 4> bits = read_bits<4>(ifs);
 
-        auto MT       = (int) range<BITS_PER_BYTE*4,12>(bits,0).to_ulong();
-        auto ROUT     = range<BITS_PER_BYTE*4,4>(bits,12);
-        auto ADC      = (int) range<BITS_PER_BYTE*4,12>(bits,16).to_ulong();
-        auto MARK     = bits[28];
-        auto GAP      = bits[29];
-        auto MTOV     = bits[30];
-        auto INVALID  = bits[31];
+        auto MT = (int)range<BITS_PER_BYTE * 4, 12>(bits, 0).to_ulong();
+        auto ROUT = range<BITS_PER_BYTE * 4, 4>(bits, 12);
+        auto ADC = (int)range<BITS_PER_BYTE * 4, 12>(bits, 16).to_ulong();
+        auto MARK = bits[28];
+        auto GAP = bits[29];
+        auto MTOV = bits[30];
+        auto INVALID = bits[31];
 
         if (ROUT[0] != 0) { ipixel += 1; }
-        if (ROUT[1] != 0) { ipixel  = 0; iline += 1; }
-        if (ROUT[2] != 0) { ipixel  = 0; iline  = 0; iframe += 1; }
+        if (ROUT[1] != 0) { ipixel = 0; iline += 1; }
+        if (ROUT[2] != 0) { ipixel = 0; iline = 0; iframe += 1; }
 
         spc->macrotime(iphoton) = MT + overflow;
         spc->microtime(iphoton) = 4095 - ADC;
         spc->pixel(iphoton) = ipixel;
-        spc->line(iphoton)  = iline;
+        spc->line(iphoton) = iline;
         spc->frame(iphoton) = iframe;
 
         if (INVALID)
@@ -132,7 +133,7 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
                 if (build_img)
                     iimg(ipixel, iline) += 1;
                 if (build_flim)
-                    flimimg(ipixel, iline, (int) spc->microtime(iphoton)/16) += 1;
+                    flimimg(ipixel, iline, (int)spc->microtime(iphoton) / 16) += 1;
             }
         }
 
@@ -140,32 +141,15 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
         {
             if (INVALID)
             {
-                overflow                += MT*std::pow(2,12);
-                spc->macrotime(iphoton) += MT*std::pow(2,12);
+                overflow += MT * std::pow(2, 12);
+                spc->macrotime(iphoton) += MT * std::pow(2, 12);
             }
             else
             {
-                overflow                += std::pow(2,12);
-                spc->macrotime(iphoton) += std::pow(2,12);
+                overflow += std::pow(2, 12);
+                spc->macrotime(iphoton) += std::pow(2, 12);
             }
         }
-        //if (!INVALID)
-            //std::cout << macrotime(iphoton) << " " << microtime(iphoton) << std::endl;
-
-        //std::cout << bits << std::endl;
-        //std::cout << 
-            //MT << " " << 
-            //ROUT << " " <<
-            //ADC << " " <<
-            //MARK << " " <<
-            //GAP << " " << 
-            //MTOV << " " << 
-            //INVALID << " " << 
-            //std::endl;
-
-        //if (iphoton == 10) return 1;
-
-        //break;
     }
     ifs.close();
 
@@ -174,14 +158,14 @@ int loadspc(std::string fn_spc, std::shared_ptr<spcfile> spc, bool build_img, bo
     spc->microtime = spc->microtime.elem( arma::find_finite(spc->microtime) );
 
     // replace file extension spc -> csv
-    std::string fn_iimg = fn_spc.substr(0, fn_spc.size()-4) + "_int.h5";
-    std::string fn_flimimg = fn_spc.substr(0, fn_spc.size()-4) + "_flim.h5";
+    std::string fn_iimg = fn_spc.substr(0, fn_spc.size()-4) + "_int.txt";
+    std::string fn_flimimg = fn_spc.substr(0, fn_spc.size()-4) + "_flim.txt";
 
     if (build_img)
-        iimg.save(fn_iimg, arma::hdf5_binary);
+        iimg.save(fn_iimg, arma::raw_ascii);
 
     if (build_flim)
-        flimimg.save(fn_flimimg, arma::hdf5_binary);
+        flimimg.save(fn_flimimg, arma::raw_ascii);
 
     return 0;
 }
