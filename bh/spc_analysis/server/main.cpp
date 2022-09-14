@@ -12,6 +12,7 @@
 
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -42,6 +43,8 @@ int __cdecl main(void)
     int iSendResult;
     char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
+    char sendbuf[DEFAULT_BUFLEN];
+    int sendbuflen = DEFAULT_BUFLEN;
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -158,6 +161,16 @@ int __cdecl main(void)
                 std::shared_ptr<spcimage> S = std::make_shared<spcimage>();
                 int status = loadspc(fn_spc, S, build_img, build_flim, img_x, img_y);
                 printf(" done.\n");
+
+                // Echo the buffer back to the sender
+                itoa(status, sendbuf, 10);
+                iSendResult = send(ClientSocket, sendbuf, iResult, 0);
+                if (iSendResult == SOCKET_ERROR) {
+                    printf("send failed with error: %d\n", WSAGetLastError());
+                    closesocket(ClientSocket);
+                    WSACleanup();
+                    return 1;
+                }
             }
         }
         else if (iResult == 0)
