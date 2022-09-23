@@ -220,8 +220,9 @@ int main()
             // park beam at specified location and confirm that scanner has moved
             lim_scan = 0;
             fcnt = 50;
-            GVD_set_parameter(gvd_act_mod, FRAME_COUNTER, fcnt);  // 
-            GVD_set_parameter(gvd_act_mod, LIMIT_SCAN, lim_scan);  // 
+            gvd_ret = GVD_set_parameter(gvd_act_mod, FRAME_COUNTER, fcnt);  // 
+            gvd_ret = GVD_set_parameter(gvd_act_mod, LIMIT_SCAN, lim_scan);  //
+            gvd_ret = GVD_set_parameter(gvd_act_mod, ZOOM_FACTOR, zoom_factor); // change Zoom factor
             GVD_prepare_scan_curve(gvd_act_mod);
             gvd_error = GVD_get_parameters(gvd_act_mod, &gvd_data);
             GVD_get_scan_info(gvd_act_mod, &scan_info);
