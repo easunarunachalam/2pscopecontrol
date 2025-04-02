@@ -1,6 +1,5 @@
 import pymmcore
 import os.path
-import sys
 import time
 from pylablib.devices import Thorlabs
 import pyvisa
@@ -10,8 +9,12 @@ import nidaqmx.system
 from nidaqmx.types import CtrTime
 
 import threading
-from ipywidgets import Layout, Button, Box, Checkbox, FloatText, Textarea, Output, Dropdown, Label, IntSlider, GridspecLayout, jslink
+from ipywidgets import Layout, Button, Box, Checkbox, FloatText, Textarea, Output, Dropdown, Label, IntSlider, GridspecLayout, Tab, Text, jslink
 from IPython.display import display
+
+import sys
+sys.path.append(r"C:/Users/TCSPC/Documents/GitHub/davy-jones/")
+from davy_jones import DeepSee
 
 # initialize MM-controlled devices
 
@@ -50,11 +53,11 @@ print("Kinesis devices:", kinesis_devices)
 # initialize laser
 
 rm = pyvisa.ResourceManager()
-
 resource_list = rm.list_resources()
-
 print("pyVISA resources:", resource_list)
-
+insight_laser = rm.open_resource(resource_list[-1])
+insight_laser.baud_rate = 115200
+insight_laser.write_termination = '\r'
 
 # 
 
@@ -146,6 +149,28 @@ def HWP_value_change(change):
 def SYNC_value_change(change):
     if (change["new"] >= 0) and (change["new"] <= 359.99):        
         SYNC_set_pos(change["new"])
+        
+def laser_shutter(change):
+    global laser_mutex
+    
+    laser_mutex.acquire()
+    
+    shutter_state = int(insight_laser.query_ascii_values(r"SHUTter?", converter="s")[0])
+    if shutter_state == 0:
+        # open shutter
+        insight_laser.write_ascii_values(r"SHUTter 1", "")
+    elif shutter_state == 1:
+        # close shutter
+        insight_laser.write_ascii_values(r"SHUTter 0", "")
+    else:
+        print("Error: Unrecognized shutter state.")
+    
+def laserWL_set(change):
+    insight_laser.write_ascii_values(r"WAV " + str(change), "")
+    
+def laserWL_value_change(change):
+    if (change["new"] >= 690) and (change["new"] <= 1300):        
+        laserWL_set(change["new"])
         
 def shutter_value_change(change):
     if change["new"]:
@@ -250,7 +275,7 @@ form_items[8].children[2].on_click(lambda f: Y_set_pos_rel(-form_items[8].childr
 form_items[8].children[3].on_click(lambda f: Y_set_pos_rel(form_items[8].children[1].value))
 form_items[9].children[2].on_click(lambda f: Z_set_pos_rel(-form_items[9].children[1].value))
 form_items[9].children[3].on_click(lambda f: Z_set_pos_rel(form_items[9].children[1].value))
-
+form_items[10].children[1].observe(laserWL_value_change, names="value")
 
 
 def update_status_bg_t1(form_items):
@@ -290,7 +315,12 @@ form = Box(form_items, layout=Layout(
     width='100%'
 ))
 
-display(form)
+tab = Tab()
+tab.children = [form, Text(description="name")]
+tab.titles = ["Preview", "Acquisition"]
+
+# display(form)
+display(tab)
 
 t1.start()
 t2.start()
