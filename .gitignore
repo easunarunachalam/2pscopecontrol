@@ -5,4 +5,4 @@ bh/include/*
 out/
 *.vsidx
 .vs/
-*.pyc
+**/*.pyc
