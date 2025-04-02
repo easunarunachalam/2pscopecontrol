@@ -126,8 +126,8 @@ int main()
     int ny = 256;
 
     // to read the bank and save in .sdt file
-    buffer = (unsigned short*)realloc(buffer, max_page * page_size *
-        no_of_active_spc * sizeof(unsigned short));
+    //buffer = (unsigned short*)realloc(buffer, max_page * page_size *
+    //    no_of_active_spc * sizeof(unsigned short));
 
     SPC_set_parameter(-1, STOP_ON_OVFL, 0);
     SPC_set_parameter(-1, STOP_ON_TIME, 1);
@@ -137,12 +137,13 @@ int main()
     if (module_type < M_SPC150 && module_type > M_SPC180)
         SPC_enable_sequencer(-1, 1);
     SPC_set_parameter(-1, MODE, SCAN_IN);
+    // SPC_set_parameter(-1, MODE, FIFO_32M);
 
     // SPC memory for Scan modes is configured by setting scan size parameters
     //   SPC_configure_memory is used at the end to get the current state
-    SPC_set_parameter(-1, ADC_RESOLUTION, 8); // 6 bits ADC 
-    SPC_set_parameter(-1, SCAN_SIZE_X, nx);   // image size nx * ny pixels
-    SPC_set_parameter(-1, SCAN_SIZE_Y, ny);
+    SPC_set_parameter(-1, ADC_RESOLUTION, 4); // 6 bits ADC 
+    SPC_set_parameter(-1, SCAN_SIZE_X, 512);   // image size nx * ny pixels
+    SPC_set_parameter(-1, SCAN_SIZE_Y, 512);
     SPC_set_parameter(-1, SCAN_ROUT_X, 1);    // without routing
     SPC_set_parameter(-1, SCAN_ROUT_Y, 1);
     // set also other parameters which can be important in Scan mode
@@ -160,6 +161,7 @@ int main()
     page_size = spc_mem_info.blocks_per_frame * spc_mem_info.frames_per_page * block_length;
 
     buffer = (unsigned short*)malloc(page_size * no_of_active_spc * sizeof(unsigned short));
+    BZERO(buffer);
  
 
     float new_time, old_time, disp_time, max_time;
@@ -180,10 +182,10 @@ int main()
     if (ret < 0)  // errors during memory fill
         return -1;
 
-    //   measurement  page must be set on all modules  
+    // measurement page must be set on all modules  
     SPC_set_page(-1, meas_page);
 
-    //  rates should  be cleared, sync state can be checked   
+    // rates should be cleared, sync state can be checked   
     for (unsigned int i = 0; i < MAX_NO_OF_SPC; i++) {
         if (mod_active[i]) {
             SPC_clear_rates(i);  /* it is needed one time only */
@@ -194,14 +196,14 @@ int main()
     /*  now measurement can be started on all used modules */
     new_time = old_time = 0.0;
     disp_time = 1.0;
-    max_time = 3.0;
+    max_time = 6.0;
 
     //SPC_set_parameter(-1, TRIGGER, 2);   // trigger active high
 
     lim_scan = 0;
-    fcnt = 50;
-    GVD_set_parameter(gvd_act_mod, FRAME_COUNTER, fcnt);  // 
-    GVD_set_parameter(gvd_act_mod, LIMIT_SCAN, lim_scan);  // 
+    // fcnt = 50;
+    // GVD_set_parameter(gvd_act_mod, FRAME_COUNTER, fcnt);  // 
+    GVD_set_parameter(gvd_act_mod, LIMIT_SCAN, lim_scan);
     GVD_prepare_scan_curve(gvd_act_mod);
     gvd_error = GVD_get_parameters(gvd_act_mod, &gvd_data);
     GVD_get_scan_info(gvd_act_mod, &scan_info);
@@ -215,7 +217,7 @@ int main()
 
     //gvd_ret = GVD_stop_scan(gvd_act_mod);
 
-    GVD_test_state(gvd_act_mod, &gvd_state, 1);   // test state + clear flags
+    GVD_test_state(gvd_act_mod, &gvd_state, 1); // test state + clear flags
 
     // attempt to start measurement on each active module
     for (unsigned int i = 0; i < MAX_NO_OF_SPC; i++) {
@@ -248,14 +250,14 @@ int main()
             // user must provide safety way out from this loop 
             //    in case when trigger or some of scan signals are not OK,
             //          it can hang up computer
-            if (spc_state & SPC_WAIT_TRG) {   // wait for trigger                
+            if (spc_state & SPC_WAIT_TRG) {   // wait for trigger
                 printf("L%d\n", __LINE__);
                 continue;
             }
             if (spc_state & SPC_ARMED) {  //  system armed   
                 
                 SPC_get_scan_clk_state(0, &scan_state);
-                printf("L%d: %#08x %#08x %#04x %#08x %#08x %#08x\n", __LINE__, SPC_ARMED, SPC_MEASURE, spc_state, spc_state & SPC_ARMED, spc_state & SPC_MEASURE, scan_state);
+                printf("L%d: %#08x %#08x %#08x %#08x %#08x %#08x\n", __LINE__, SPC_ARMED, SPC_MEASURE, spc_state, spc_state & SPC_ARMED, spc_state & SPC_MEASURE, scan_state);
                 
                 if ((spc_state & SPC_MEASURE) == 0) {
                     printf("L%d\n", __LINE__);
@@ -284,10 +286,10 @@ int main()
                         break;
                     }
                     //  If during the measurement SPC_stop_measurement is called :
-                    //      1st call to the function forces very short collection time 
-                    //         to finish the current frame and returns error -21. 
-                    //         The measurement will stop automatically after finishing current frame. 
-                    //      2nd call will stop the measurement without waiting for the end of frame.            
+                    //      1st call to the function forces very short collection time
+                    //         to finish the current frame and returns error -21.
+                    //         The measurement will stop automatically after finishing current frame.
+                    //      2nd call will stop the measurement without waiting for the end of frame.
                 }
             }
             else {
@@ -307,7 +309,7 @@ int main()
         //   using function  SPC_save_data_to_sdtfile, and then load it to SPC main software
         //   
         ret = SPC_save_data_to_sdtfile(-1, buffer, 2 * page_size * no_of_active_spc,
-            "C:\\Users\\TCSPC\\Desktop\\dll_scan_results.sdt");
+            "C:\\Users\\TCSPC\\Desktop\\test_scan_sync_in\\dll_scan_results.sdt");
 
         gvd_ret = GVD_stop_scan(gvd_act_mod);
         GVD_test_state(gvd_act_mod, &gvd_state, 1);   // test state + clear flags
