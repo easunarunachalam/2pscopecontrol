@@ -1,6 +1,6 @@
 // main.cpp : FCS acquisition engine
 // run as follows:
-// PS C:\Users\TCSPC\Documents\GitHub\2pscopecontrol\bh\FCS_engine\pointwise_FIFO\out\build\x64-debug>
+// PS C:\Users\Arunachalam\Documents\GitHub\2pscopecontrol\bh\FCS_engine\pointwise_FIFO\out\build\x64-debug>
 // .\FCS_engine.exe "<working directory>" <collection time>
 
 #include <conio.h>
@@ -26,9 +26,9 @@
 #endif
 
 
-char spc_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\spcm.ini";
-char dcc_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\dcc100.ini";
-char gvd_ini_fname[255] = "C:\\Users\\TCSPC\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\gvd120.ini";
+char spc_ini_fname[255] = "C:\\Users\\Arunachalam\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\spcm.ini";
+char dcc_ini_fname[255] = "C:\\Users\\Arunachalam\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\dcc100.ini";
+char gvd_ini_fname[255] = "C:\\Users\\Arunachalam\\Documents\\GitHub\\2pscopecontrol\\bh\\config\\gvd120.ini";
 
 short  test_fill_state(void);
 short  save_photons_in_file(void);
@@ -90,14 +90,20 @@ short SPC_ACTIVE_MOD = 0;
 #include <iostream>
 int main(int argc, char** argv)
 {
-    if (argc != 3) {
+    printf("hello.\n");
+
+    if (argc != 4) {
         printf("Error: Incorrect number of arguments. Exiting...\n");
+        return - 1;
     }
     else {
         strcpy(data_dir_path, argv[1]);
         printf("Working directory set as: %s\n", data_dir_path);
 
-        collection_time = std::atof(argv[2]);
+        SPC_ACTIVE_MOD = (short) std::atoi(argv[2]);
+        printf("Active module set as: %d\n", SPC_ACTIVE_MOD);
+
+        collection_time = std::atof(argv[3]);
         printf("Collection time set as: %2.2f s\n", collection_time);
     }
 
@@ -266,6 +272,7 @@ int main(int argc, char** argv)
             clock_t t;
             t = clock();
 
+            std::cout << "act mod = "<< spc_act_mod << std::endl;
             spc_ret = SPC_start_measurement(spc_act_mod);
 
             while (!spc_ret) {
